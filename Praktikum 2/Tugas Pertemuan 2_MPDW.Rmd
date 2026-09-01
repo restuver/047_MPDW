@@ -1,0 +1,357 @@
+---
+title: "Tugas Pertemuan 2 - Penanganan Autokorelasi"
+author: "Restu Ramadhani_M0401241047"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+---
+
+# Pemanggilan Library
+```{r}
+library(dplyr)
+library(TTR)
+library(forecast)
+library(lmtest) #digunakan untuk uji formal pendeteksian autokorelasi
+library(orcutt) #untuk membuat model regresi Cochrane-Orcutt
+library(HoRM) #untuk membuat model regresi Hildreth-Lu
+library(readxl)
+library(lmtest)
+```
+# Data 1 - Market Share
+```{r}
+library(readxl)
+
+data1 <- read_excel("D:/IPB/PPT Kuliah - IPB/Semester 5 Dept Statistika/MPDW/Dataset/Dataset Praktikum 2.xlsx",sheet = "Market")
+data1
+```
+# Eksplorasi Data
+```{r}
+# Summary
+summary(data1)
+```
+```{r}
+# Scatterplot
+plot(data1$Price, data1$`Market share`, main = "Market Share vs Price", xlab = "Price", ylab = "Market Share")
+```
+```{r}
+# Boxplot
+## Boxplot Market Share
+boxplot(data1$`Market share`)
+## Boxplot Price
+boxplot(data1$Price)
+```
+# Model Regresi
+```{r}
+model1 <- lm(`Market share`~Price, data = data1)
+summary(model1)
+```
+```{r}
+names(data1)
+```
+
+Berdasarkan hasil di atas, diketahui bahwa terdapat persamaan pada marketshare = 26.910 - 24.290 (price) yang artinya ketika kenaikan price sebesar satu satuan akan menurunkan market share sebesar 24.290 dengan asumsi faktor faktor lainnya yang tidak termasuk ke dalam model. Sehingga, ketika price semakin tinggi, maka market share cenderung semakin rendah. Kemudian berdasarkan p value, H0 ditolak yang artinya price tidak berpengaruh terhadap market share. Selanjutnya, diperoleh nilai R square sebesar 0.9511 atau 95,11% variasi market share dapat dijelaskan oleh price dalam model regresi dan sisanya yakni 4.89% variasi market share dapat dijelaskan oleh faktor lain yang tidak masuk ke dalam model beserta dengan galatnya. Hasil uji F juga menunjukkan bahwa model regresi secara keseluruhan adalah signifikan.
+
+# Uji Asumsi
+```{r}
+# Linearitas
+plot(data1$Price, data1$`Market share`, xlab = "Price", ylab = "Market Share", main = "Market Share vs Price")
+abline(model1)
+
+plot(model1, which = 1)
+```
+Berdasarkan scatterplot Market Share vs Price, titik-titik pengamatan cenderung mengikuti pola garis lurus dengan arah linear yang negatif. Namun, pada grafik Residuals vs Fitted terlihat sedikit pola melengkung pada garis smoothing, yang menunjukkan adanya indikasi kecil penyimpangan dari linearitas.
+
+```{r}
+# Normalitas
+shapiro.test(residuals(model1))
+plot(model1, which = 2)
+```
+Berdasarkan Shapiro Wilk test diperoleh nilai statistik W=0.9744 dengan p value sebesar 0.8437. Karena p value > 0.05, maka H0 gagal ditolak yang artinya asumsi normalitas tersebut terpenuhi dan didukung juga oleh grafik Normal Q-Q Plot yang menunjukkan bahwa titik-titik pengamatan cenderung mengikuti garis lurus.
+
+```{r}
+# Homoskedastisitas
+bptest(model1)
+plot(model1, which = 3)
+```
+Berdasarkan uji Breusch-Pagan diperoleh nilai statistik BP=0.11646 dengan p value=0.7329. Karena p value > 0.05, maka gagal tolak H0. Dengan demikian, tidak terdapat cukup bukti adanya heteroskedastisitas pada model. Oleh karena itu, asumsi homoskedastisitas terpenuhi.
+
+```{r}
+# Non-Autokorelasi
+plot(residuals(model1), type = "o", main = "Residual Plot", xlab = "Time", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+dwtest(model1)
+```
+Berdasarkan Durbin Watson test diperoleh nilai DW sebesar 1.1358 dengan p value sebesar 0.009813. Karena p value < 0.05, maka tolak H0. Dengan demikian, terdapat autokorelasi positif pada residual. Nilai Durbin-Watson yang lebih kecil dari 2 juga mendukung adanya autokorelasi positif. Sehingga diperlukan penanganan khusus dengan metode Cochrane-Orcutt dan Hildreth-Lu. 
+
+# Penanganan Autokorelasi (Cochrane-Orcutt)
+```{r}
+model1CO <- cochrane.orcutt(model1)
+model1CO
+```
+Setelah dilakukan penanganan autokorelasi dengan metode Cochrane-Orcutt, diperoleh bahwa nilai Durbin-Watson meningkat dari 1.1358 menjadi 1.95804 dengan p value sebesar 0.4151. Hal tersebut menunjukkan bahwa nilai DW sudah mendekati 2 dan indikasi autokorelasi telah berhasil dikurangi. Kemudian model akhir yang didapatkan adalah marketshare = 26.910 - 24.290 (price).
+
+```{r}
+# Rho optimum
+rho <- model1CO$rho
+rho
+```
+# Transformasi Manual
+```{r}
+# Transformasi Cochrane-Orcutt secara manual
+marketshare.trans <- data1$`Market share`[-1] -
+                     data1$`Market share`[-length(data1$`Market share`)] * rho
+
+price.trans <- data1$Price[-1] -
+               data1$Price[-length(data1$Price)] * rho
+
+# Model setelah transformasi
+model1COmanual <- lm(marketshare.trans ~ price.trans)
+
+summary(model1COmanual)
+```
+```{r}
+b0bintang <- model1COmanual$coefficients[-2]
+b0 <- b0bintang/(1-rho)
+b0
+
+b1 <- model1COmanual$coefficients[-1]
+b1
+```
+
+# Penanganan Autokorelasi (Hildreth-Lu)
+```{r}
+library(HoRM)
+```
+
+```{r}
+#Penanganan Autokorelasi Hildreth lu
+# Hildreth-Lu
+hildreth.lu.func<- function(r, model1){
+  x <- model.matrix(model1)[,-1]
+  y <- model.response(model.frame(model1))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t]-r*y[t-1]
+  x <- x[t]-r*x[t-1]
+  
+  return(lm(y~x))
+}
+
+#Pencariab rho yang meminimumkan SSE
+r <- c(seq(0.1,0.9, by= 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func(i, model1))}))
+round(tab, 4)
+```
+Pertama-tama akan dicari di mana kira-kira $ρ$ yang menghasilkan SSE minimum. Pada hasil di atas terlihat $ρ$ minimum ketika 0.3. Namun, hasil tersebut masih kurang teliti sehingga akan dicari kembali $ρ$ yang lebih optimum dengan ketelitian yang lebih. Jika sebelumnya jarak antar $ρ$ yang dicari adalah 0.1, kali ini jarak antar $ρ$ adalah 0.001.
+
+
+```{r}
+#Rho optimal di sekitar 
+rOpt <- seq(0.3,0.6, by= 0.001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model1))}))
+head(tabOpt[order(tabOpt$SSE),])
+
+#Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$SSE ~ tab$rho , type = "l", xlab = "Rho", ylab = "SSE")
+abline(v = tabOpt[tabOpt$SSE==min(tabOpt$SSE),"rho"], lty = 2, col="red",lwd=2)
+text(x=0.341, y=0.2397500, labels = "rho=0.341", cex = 0.8)
+```
+
+Perhitungan yang dilakukan aplikasi `R` menunjukkan bahwa nilai $ρ$ optimum, yaitu saat SSE terkecil terdapat pada nilai $ρ=0.341$. Hal tersebut juga ditunjukkan pada plot. Selanjutnya, model dapat didapatkan dengan mengevaluasi nilai $ρ$ ke dalam fungsi `hildreth.lu.func`, serta dilanjutkan dengan pengujian autokorelasi dengan uji Durbin-Watson. Namun, setelah pengecekan tersebut tidak lupa koefisien regresi tersebut digunakan untuk transformasi balik. Persamaan hasil transformasi itulah yang menjadi persamaan sesungguhnya.
+
+```{r}
+#Model terbaik
+model1HL <- hildreth.lu.func(0.425, model1)
+summary(model1HL)
+
+#Transformasi Balik
+cat("y = ", coef(model1HL)[1]/(1-0.425), "+", coef(model1HL)[2],"x", sep = "")
+```
+```{r}
+#Deteksi autokorelasi
+dwtest(model1HL)
+```
+Berdasarkan uji Durbin Watson setelah dilakukan penanganan autokorelasi menggunakan metode Hildreth Lu, diperoleh nilai DW sebesar 1.9577 dengan p value sebesar 0.4148. Karena p value > 0.05, maka gagal tolak H0, sehingga tidak terdapat bukti yang cukup adanya autokorelasi positif pada residual. Nilai DW yang mendekati 2 juga menunjukkan bahwa residual cenderung tidak mengalami autokorelasi sehingga, asumsi adanya non autokorelasi telah terpenuhi setelah dilakukan penanganan menggunakan metode Hildreth Lu.
+
+
+```{r}
+#Perbandingan Metode Penanganan Autokorelasi
+sse <- c(`model awal` = deviance(model1), `Cochrane.Orcutt` = deviance(model1COmanual), `Hildreth.Lu` = deviance(model1HL))
+
+n <- length(data1$`Market share`)
+mse <- sse/n
+
+akurasi <- rbind(SSE = sse, MSE = mse)
+akurasi
+```
+Berdasarkan perbandingan nilai SSE dan MSE, model awal memiliki nilai SSE sebesar 3,3082574 dan MSE sebesar 0,1654129. Setelah dilakukan penanganan autokorelasi, nilai SSE dan MSE menurun menjadi 2,6593681 dan 0,1329684 pada metode Cochrane–Orcutt serta 2,6593683 dan 0,1329684 pada metode Hildreth–Lu. Hal ini menunjukkan bahwa kedua metode mampu menurunkan galat pada model dibandingkan model awal. Berdasarkan nilai SSE, Cochrane–Orcutt menghasilkan nilai yang sedikit lebih kecil dibandingkan Hildreth–Lu, tetapi perbedaannya sangat kecil. Selain itu, kedua metode menghasilkan nilai Durbin-Watson yang mendekati 2 dengan p-value > 0,05, sehingga keduanya berhasil menangani masalah autokorelasi. Dengan demikian, Cochrane–Orcutt dan Hildreth–Lu memiliki kinerja yang hampir sama, dengan Cochrane–Orcutt sedikit lebih baik berdasarkan SSE.
+
+# Data 2 - Sales Advertising
+```{r}
+data2 <- read_excel("D:/IPB/PPT Kuliah - IPB/Semester 5 Dept Statistika/MPDW/Dataset/Dataset Praktikum 2.xlsx",sheet = "Sales")
+data2
+```
+
+# Eksplorasi Data
+```{r}
+# Summary
+summary(data2)
+```
+```{r}
+# Scatterplot
+plot(data2$Sales, data2$`Advertising`, main = "Advertising vs Sales", xlab = "Advertising", ylab = "Sales")
+```
+```{r}
+# Boxplot
+## Boxplot Advertising
+boxplot(data2$`Advertising`)
+## Boxplot Sales
+boxplot(data2$Sales)
+```
+# Model Regresi
+```{r}
+model2 <- lm(Sales ~ Advertising, data = data2)
+summary(model2)
+```
+Berdasarkan hasil di atas, diketahui bahwa terdapat persamaan regresi Sales = 5.965 + 0.710 (Advertising), yang artinya ketika Advertising mengalami kenaikan sebesar satu satuan, maka Sales akan meningkat sebesar 0.710 satuan, dengan asumsi faktor-faktor lainnya yang tidak termasuk ke dalam model dianggap konstan. Sehingga, ketika Advertising semakin tinggi, maka Sales cenderung semakin tinggi. Kemudian, berdasarkan p value Advertising < 2 × 10^-16, yang lebih kecil dari 0.05, maka tolak H0, yang artinya Advertising berpengaruh secara signifikan terhadap Sales. Selanjutnya, diperoleh nilai R-squared sebesar 0.9596 atau 95.96%, yang berarti variasi Sales dapat dijelaskan oleh Advertising dalam model regresi, sedangkan sisanya sebesar 4.04% variasi Sales dapat dijelaskan oleh faktor lain yang tidak masuk ke dalam model beserta dengan galatnya. Hasil uji F juga menunjukkan bahwa model regresi secara keseluruhan adalah signifikan, dengan nilai F-statistic sebesar 902.3 dan p-value < 2.2 × 10^-16. Dengan demikian, model regresi yang melibatkan Advertising secara keseluruhan signifikan dalam menjelaskan variasi Sales.
+
+# Uji Asumsi
+```{r}
+# Linearitas
+plot(data2$Sales, data2$Advertising, xlab = "Sales", ylab = "Advertising", main = "Advertising vs Sales")
+abline(model2)
+
+plot(model2, which = 1)
+```
+
+Berdasarkan grafik Advertising vs Sales, terlihat adanya hubungan positif antara Advertising dan Sales, yang menunjukkan bahwa peningkatan Advertising cenderung diikuti oleh peningkatan Sales. Hal ini sejalan dengan hasil analisis regresi yang menunjukkan koefisien Advertising bernilai positif sebesar 0.710 dan nilai R-square sebesar 95.96%. Selanjutnya, berdasarkan grafik Residuals vs Fitted, residual tidak menyebar secara acak di sekitar garis nol dan membentuk pola melengkung. Hal ini menunjukkan bahwa asumsi linearitas pada model regresi belum sepenuhnya terpenuhi.
+
+```{r}
+# Normalitas
+shapiro.test(residuals(model2))
+plot(model2, which = 2)
+```
+Berdasarkan Shapiro Wilk test diperoleh p-value sebesar 0.0188 < 0.05, sehingga tolak H0 dan dapat disimpulkan bahwa residual tidak berdistribusi normal. Hal ini didukung oleh grafik Q-Q Residuals yang menunjukkan adanya penyimpangan titik-titik dari garis diagonal, terutama pada bagian ekor. Oleh karena itu, asumsi normalitas residual belum terpenuhi.
+
+```{r}
+# Homoskedastisitas
+bptest(model2)
+plot(model2, which = 3)
+```
+Berdasarkan Breusch Pagan test diperoleh p-value sebesar 0.9512 > 0.05, sehingga tolak H0. Artinya, tidak terdapat indikasi heteroskedastisitas sehingga asumsi homoskedastisitas telah terpenuhi. 
+
+```{r}
+# Non-Autokorelasi
+plot(residuals(model2), type = "o", main = "Residual Plot", xlab = "Time", ylab = "Residuals")
+abline(h = 0, lty = 2, col = "red")
+
+dwtest(model2)
+```
+Berdasarkan Durbin Watson test diperoleh nilai DW = 0.16204 dengan p-value < 2.2 × 10^-16. Karena p-value < 0.05, maka tolak H0, yang berarti terdapat autokorelasi positif pada residual. Dengan demikian, asumsi independensi residual tidak terpenuhi. Sehingga, diperlukan penanganan untuk mengatas permasalahan tersebut dengan metode Cochrane-Orcutt dan Hildreth-Lu. 
+
+# Penanganan Autokorelasi (Cochrane-Orcutt)
+```{r}
+model2CO <- cochrane.orcutt(model2)
+model2CO
+```
+
+
+```{r}
+# Rho optimum
+rho <- model2CO$rho
+rho
+```
+Berdasarkan metode Cochrane-Orcutt, diperoleh nilai rho = 0.903123, yang menunjukkan adanya autokorelasi positif yang kuat pada model awal. Nilai Durbin-Watson sebelum transformasi sebesar 0.16204 dengan p-value 8.935 × 10^-20 < 0.05, sehingga terdapat autokorelasi positif. Setelah dilakukan transformasi Cochrane-Orcutt, nilai Durbin-Watson meningkat menjadi 1.93925 dengan p-value 0.378 > 0.05. Dengan demikian, autokorelasi telah berhasil diatasi setelah transformasi.
+
+# Transformasi Manual
+```{r}
+Advertising.trans <- data2$Advertising[-1] - data2$Advertising[-40] * rho
+Sales.trans <- data2$Sales[-1] - data2$Sales[-40] * rho
+
+model2COmanual <- lm(Sales.trans ~ Advertising.trans)
+summary(model2COmanual)
+```
+```{r}
+b0bintang <- model2COmanual$coefficients[-2]
+b0 <- b0bintang/(1-rho)
+b0
+
+b1 <- model2COmanual$coefficients[-1]
+b1
+```
+
+# Penanganan Autokorelasi (Hildreth-Lu)
+```{r}
+library(HoRM)
+```
+
+```{r}
+#Penanganan Autokorelasi Hildreth lu
+# Hildreth-Lu
+hildreth.lu.func<- function(r, model2){
+  x <- model.matrix(model2)[,-1]
+  y <- model.response(model.frame(model2))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t]-r*y[t-1]
+  x <- x[t]-r*x[t-1]
+  
+  return(lm(y~x))
+}
+
+#Pencarian rho yang meminimumkan SSE
+r <- c(seq(0.1,0.9, by= 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func(i, model2))}))
+round(tab, 4)
+```
+Pertama-tama akan dicari di mana kira-kira nilai ρ yang menghasilkan SSE minimum. Berdasarkan hasil di atas, terlihat bahwa nilai SSE terus menurun seiring dengan bertambahnya nilai ρ, sehingga SSE minimum diperoleh ketika ρ = 0.9, yaitu sebesar 1.2914. Namun, hasil tersebut masih kurang teliti karena nilai ρ yang digunakan memiliki jarak antar nilai sebesar 0.1. Oleh karena itu, akan dicari kembali nilai ρ yang lebih optimum dengan tingkat ketelitian yang lebih tinggi. Jika sebelumnya jarak antar ρ yang dicari adalah 0.1, kali ini jarak antar ρ akan dibuat menjadi 0.001 sehingga dapat diperoleh nilai ρ yang menghasilkan SSE minimum dengan lebih teliti.
+
+
+```{r}
+#Rho optimal di sekitar 
+rOpt <- seq(0.75,0.99, by= 0.001)
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model2))}))
+head(tabOpt[order(tabOpt$SSE),])
+
+#Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$SSE ~ tab$rho , type = "l", xlab = "Rho", ylab = "SSE")
+abline(v = tabOpt[tabOpt$SSE==min(tabOpt$SSE),"rho"], lty = 2, col="red",lwd=2)
+text(x=0.341, y=0.2397500, labels = "rho=0.341", cex = 0.1)
+```
+
+Perhitungan yang dilakukan menggunakan aplikasi R menunjukkan bahwa nilai ρ optimum, yaitu nilai ρ yang menghasilkan SSE terkecil, terdapat pada ρ = 0.903 dengan nilai SSE sebesar 1.291226. Hal tersebut juga ditunjukkan pada plot pencarian nilai ρ. Selanjutnya, model dapat diperoleh dengan mengevaluasi nilai ρ = 0.903, kemudian dilanjutkan dengan pengujian autokorelasi menggunakan uji Durbin-Watson. Setelah diperoleh model hasil transformasi dan dilakukan pengujian autokorelasi, koefisien regresi hasil transformasi tersebut perlu digunakan untuk melakukan transformasi balik.
+
+```{r}
+#Model terbaik
+model2HL <- hildreth.lu.func(0.903, model2)
+summary(model2HL)
+
+#Transformasi Balik
+cat("y = ", coef(model2HL)[1]/(1-0.903), "+", coef(model2HL)[2],"x", sep = "")
+```
+```{r}
+#Deteksi autokorelasi
+dwtest(model2HL)
+```
+Berdasarkan uji Durbin-Watson setelah dilakukan penanganan autokorelasi menggunakan metode Hildreth-Lu, diperoleh nilai DW sebesar 1.9393 dengan p-value sebesar 0.378. Karena p-value > 0.05, maka gagal tolak H0, sehingga tidak terdapat bukti yang cukup adanya autokorelasi positif pada residual. Nilai DW yang mendekati 2 juga menunjukkan bahwa residual cenderung tidak mengalami autokorelasi. Dengan demikian, asumsi non-autokorelasi telah terpenuhi setelah dilakukan penanganan menggunakan metode Hildreth-Lu.
+
+
+```{r}
+#Perbandingan Metode Penanganan Autokorelasi
+sse <- c(`model awal` = deviance(model2), `Cochrane.Orcutt` = deviance(model2COmanual), `Hildreth.Lu` = deviance(model2HL))
+
+n <- length(data2$Sales)
+mse <- sse/n
+
+akurasi <- rbind(SSE = sse, MSE = mse)
+akurasi
+```
+Berdasarkan perbandingan nilai SSE dan MSE, model awal memiliki nilai SSE sebesar 10.5545322 dan MSE sebesar 0.2638633. Setelah dilakukan penanganan autokorelasi, nilai SSE dan MSE menurun menjadi 1.29122545 dan 0.03228064 pada metode Cochrane–Orcutt, serta 1.29122572 dan 0.03228064 pada metode Hildreth–Lu. Penurunan nilai SSE dan MSE tersebut menunjukkan bahwa kedua metode mampu mengurangi galat pada model dibandingkan dengan model awal. Pada hal ini metode terbaiknya berdasarkan nilai SSE terkecil ada pada metode Cochrane.Orcutt walaupun hanya berbeda sangat kecil dengan metode Hildreth.Lu.
