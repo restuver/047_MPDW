@@ -1,0 +1,458 @@
+---
+title: "Tugas Praktikum 4 MPDW"
+author: "Restu Ramadhani_M0401241047"
+date: "`r Sys.Date()`"
+output:
+  rmdformats::readthedown:
+    highlight: kate
+---
+
+```{r setup, include=FALSE}
+## Global options
+knitr::opts_chunk$set(cache = TRUE)
+```
+
+```{r}
+#install.packages("TSA")
+```
+```{r}
+library(TSA)
+```
+
+# WHITE NOISE - PEMBANGKITAN DATA
+```{r}
+set.seed(1234)
+wn <- rnorm(300)
+ts.plot(wn, main = "Plot Time Series White Noise (n = 300)")
+```
+```{r}
+par(mfrow = c(1, 2))
+acf(wn)
+acf(wn, xlim = c(1, 20), main = "ACF White Noise")
+par(mfrow = c(1, 1))
+```
+
+
+# PROSES MA(2)
+1. Bangkitkan model MA(2) dengan θ₁ = 0.4 dan θ₂ = 0.6 sebanyak 300 data (manual dan dengan arima.sim)
+2. Buat plot time series, plot ACF, plot PACF dan plot EACF. Identifikasi apakah data tersebut stasioner
+3. Buat scatterplot antara Yₜ dengan Yₜ₋₁, Yₜ dengan Yₜ₋₂ serta Yₜ dengan Yₜ₋₃
+4. Hitung autokorelasi masing-masing baik dari data bangkitan maupun secara teoritis
+
+Proses MA(2):
+$$Y_t = e_t + \theta_1 e_{t-1} + \theta_2 e_{t-2}$$
+dengan $$\theta_1 = 0.4\ dan\ \theta_2 = 0.6$$
+Sehingga, $$Y_t = e_t + 0.4 e_{t-1} + 0.6 e_{t-2}$$.
+
+## 1. Pembangkitan Data MA(2)
+```{r}
+# Bangkitkan data MA(2) secara manual
+set.seed(1234)
+n <- 300
+wn <- rnorm(n)
+
+theta1 <- 0.4
+theta2 <- 0.6
+
+ma2 <- numeric(n)
+ma2[1] <- wn[1]                                   
+ma2[2] <- wn[2] + theta1 * wn[1]                  
+for (i in 3:n) {
+  ma2[i] <- wn[i] + theta1 * wn[i - 1] + theta2 * wn[i - 2]
+}
+ma2
+```
+
+```{r}
+# Bangkitkan data MA(2) dengan arima.sim
+ma2.sim <- arima.sim(list(order = c(0, 0, 2), ma = c(0.4, 0.6)), n = 300)
+ma2.sim
+```
+
+## 2. Karakteristik Data MA(2)
+```{r}
+# Plot Time Series
+ts.plot(ma2, main = "MA(2) Manual")
+ts.plot(ma2.sim, main = "MA(2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot time series MA(2) secara manual, terlihat bahwa data MA(2) yang dibangkitkan berfluktuasi dalam rataan serta tidak terdapat tren naik atau turun yang jelas. Hal ini juga terlihat pada plot time series MA(2) yang dibangkitkan dengan fungsi arima.sim, sehingga kedua plot time series tersebut menunjukkan sifat stasioner dalam rataan.
+
+```{r}
+# Plot ACF
+acf(ma2, main = "ACF MA(2) Manual")
+acf(ma2.sim, main = "ACF MA(2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot ACF MA(2) secara manual, terlihat bahwa plot ACF cut off di lag kedua, sedangkan lag setelahnya cenderung untuk mendekati nilai nol. Hal ini juga terlihat pada plot ACF MA(2) yang dibangkitkan dengan fungsi arima.sim.
+
+
+```{r}
+# PLot PACF
+pacf(ma2, main = "PACF MA(2) Manual")
+pacf(ma2.sim, main = "PACF MA(2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot PACF MA(2) secara manual, menunjukkan beberapa lonjakan pada beberapa lag awal yang kemudian cenderung meluruh dan tidak terdapat cut off yang jelas. Hal ini juga terlihat pada plot PACF MA(2) yang dibangkitkan dengan fungsi arima.sim. Sehingga, dapat disimpulkan bahwa PACF MA(2) cenderung bersifat tails off.
+
+```{r}
+# Plot EACF Manual
+TSA::eacf(ma2)
+```
+**Interpretasi:** EACF manual menunjukkan pola segitiga nol yang mengarah pada kandidat AR(0) dan MA(2)
+
+```{r}
+# Plot EACF arima.sim
+TSA::eacf(ma2.sim)
+```
+**Interpretasi:** EACF arima.sim menunjukkan pola segitiga nol yang mengarah pada kandidat AR(0) dan MA(2)
+
+## 3. Scatterplot Antar Lag dan AutoKorelasi
+```{r}
+yt_ma2   <- ma2[-1]
+yt_ma2
+yt_1_ma2 <- ma2[-300]
+yt_1_ma2
+```
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₁
+plot(x = yt_1_ma2, y = yt_ma2, xlab = expression(Y[t-1]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-1 (MA(2))")
+```
+
+
+Berdasarkan scatterplot Yₜ dengan Yₜ₋₁, terlihat bahwa terdapat pola hubungan positif antara Yₜ dan Yₜ₋₁, yang berarti bahwa ketika nilai Yₜ₋₁ meningkat, nilai Yₜ juga cenderung meningkat. Pola ini konsisten dengan sifat autokorelasi positif yang diharapkan dalam model MA(2).
+
+```{r}
+# Korelasi antara Yₜ dengan Yₜ₋₁
+cor(yt_ma2, yt_1_ma2)
+```
+Secara teoritis:
+$$
+\rho_1 = \frac{\theta_1(1+\theta_2)}{1+\theta_1^2+\theta_2^2} = \frac{0.4(1+0.6)}{1+0.4^2+0.6^2} = \frac{0.64}{1.52} \approx 0.4211
+$$
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa terdapat pola yang cenderung positif dan dibuktikan juga dengan adanya nilai korelasi sebesar 0.4211 secara teoritis dan juga empiris sebesar 0.5282201, yang berarti memiliki hubungan positif sedang. 
+
+```{r}
+yt_ma2_2 <- ma2[-c(1, 2)]
+yt_ma2_2
+yt_2_ma2 <- ma2[-c(299, 300)]
+yt_2_ma2
+```
+
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₂
+plot(x = yt_2_ma2, y = yt_ma2_2, xlab = expression(Y[t-2]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-2 (MA(2))")
+```
+```{r}
+# Korelasi antara Yₜ dengan Yₜ₋₂
+cor(yt_ma2_2, yt_2_ma2)
+```
+
+Secara teoritis:
+$$
+\rho_2 = \frac{\theta_2}{1+\theta_1^2+\theta_2^2} = \frac{0.6}{1.52} \approx 0.3947
+$$
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa terdapat pola yang cenderung positif dan dibuktikan juga dengan adanya nilai korelasi sebesar 0.3947 secara teoritis dan juga empiris sebesar 0.3947, yang berarti memiliki hubungan positif sedang.
+
+```{r}
+yt_ma2_3 <- ma2[-c(1, 2, 3)]
+yt_ma2_3
+yt_3_ma2 <- ma2[-c(298, 299, 300)]
+yt_3_ma2
+```
+
+
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₃
+plot(x = yt_3_ma2, y = yt_ma2_3, xlab = expression(Y[t-3]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-3 (MA(2))")
+```
+
+```{r}
+# Korelasi antara Yₜ denga  Yₜ₋₃
+cor(yt_ma2_3, yt_3_ma2)
+```
+Secara teoritis:
+$$
+\rho_3 = 0
+$$
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa tidak terdapat pola yang jelas antara Yₜ dan Yₜ₋₃  sehingga tidak memiliki hubungan linear yang jelas. Hal ini juga didukung dengan adanya temuan nilai korelasi yang secara teoritis adalah 0 atau jika terhadap korelasi empiris memiliki kekuatan yang lemah. 
+
+
+**Kesimpulan:** Berdasarkan semua analisis yang telah dilakukan pada MA(2), dapat disimpulkan bahwa data yang dibangkitkan bersifat stasioner, memiliki autokorelasi yang positif pada lag 1 dan lag 2, serta tidak memiliki autokorelasi pada lag 3.
+
+# PROSES AR(2)
+1. Bangkitkan model AR(2) dengan φ₁ = 0.5 dan φ₂ = 0.2 sebanyak 300 data (manual dan dengan arima.sim)
+2. Buat plot time series, plot ACF, plot PACF dan plot EACF. Identifikasi apakah data tersebut stasioner
+3. Buat scatterplot antara Yₜ dengan Yₜ₋₁, Yₜ dengan Yₜ₋₂ serta Yₜ dengan Yₜ₋₃
+4. Hitung autokorelasi masing-masing baik dari data bangkitan maupun secara teoritis
+
+Proses AR(2):
+$$
+Y_t = e_t + \phi_1 Y_{t-1} + \phi_2 Y_{t-2}
+$$
+dengan $\phi_1 = 0.5\ dan\ \phi_2 = 0.2$
+Sehingga, $$Y_t = e_t + 0.5\,Y_{t-1} + 0.2\,Y_{t-2}$$
+
+
+## 1. Pembangkitan Data AR(2)
+```{r}
+# Bangkitkan data AR(2) secara manual
+set.seed(1234)
+n <- 300
+wn <- rnorm(n)
+
+phi1 <- 0.5
+phi2 <- 0.2
+
+ar2 <- numeric(n)
+ar2[1] <- wn[1]                                 
+ar2[2] <- wn[2] + phi1 * ar2[1]                   
+for (i in 3:n) {ar2[i] <- wn[i] + phi1 * ar2[i - 1] + phi2 * ar2[i - 2]}
+ar2
+```
+
+
+```{r}
+# Bangkitkan data AR(2) dengan arima.sim
+ar2.sim <- arima.sim(list(order = c(2, 0, 0), ar = c(0.5, 0.2)), n = 300)
+ar2.sim
+```
+
+
+## 2. Karakteristik Data AR(2)
+```{r}
+# Plot Time Series
+ts.plot(ar2, main = "AR(2) Manual")
+ts.plot(ar2.sim, main = "AR(2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot time series AR(2) secara manual, terlihat bahwa data AR(2) yang dibangkitkan berfluktuasi dalam rataan serta tidak terdapat tren naik atau turun yang jelas. Hal ini juga terlihat pada plot time series AR(2) yang dibangkitkan dengan fungsi arima.sim, sehingga kedua plot time series tersebut menunjukkan sifat stasioner dalam rataan.
+
+```{r}
+# Plot ACF
+acf(ar2, main = "ACF AR(2) Manual")
+acf(ar2.sim, main = "ACF AR(2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot ACF AR(2) secara manual, terlihat bahwa plot ACF tails off, sedangkan lag setelahnya cenderung untuk mendekati nilai nol. Hal ini juga terlihat pada plot ACF AR(2) yang dibangkitkan dengan fungsi arima.sim.
+
+
+```{r}
+# PLot PACF
+pacf(ar2, main = "PACF AR(2) Manual")
+pacf(ar2.sim, main = "PACF AR(2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot PACF AR(2) secara manual, menunjukkan beberapa lonjakan pada beberapa lag awal yang kemudian cenderung meluruh dan terdapat cut off di lag kedua. Hal ini juga terlihat pada plot PACF AR(2) yang dibangkitkan dengan fungsi arima.sim. Sehingga, dapat disimpulkan bahwa PACF AR(2) cenderung bersifat cut off di lag kedua.
+
+```{r}
+# Plot EACF Manual
+TSA::eacf(ar2)
+```
+**Interpretasi:** EACF manual menunjukkan pola segitiga nol yang mengarah pada kandidat AR(2) dan MA(0)
+```{r}
+# Plot EACF arima.sim
+TSA::eacf(ar2.sim)
+```
+**Interpretasi:** EACF arima.sim menunjukkan pola segitiga nol yang mengarah pada kandidat AR(2) dan MA(0)
+
+## 3. Scatterplot Antar Lag dan Autokorelasi
+
+```{r}
+yt_ar2   <- ar2[-1]
+yt_ar2
+yt_1_ar2 <- ar2[-300]
+yt_1_ar2
+```
+
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₁
+plot(x = yt_1_ar2, y = yt_ar2, xlab = expression(Y[t-1]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-1 (AR(2))")
+```
+```{r}
+# Korelasi antara Yₜ dengan Yₜ₋₁
+cor(yt_ar2, yt_1_ar2)
+```
+
+$$
+\rho_1=\frac{\phi_1}{1-\phi_2},\qquad \rho_k=\phi_1\rho_{k-1}+\phi_2\rho_{k-2}\ \text{untuk}\ k\ge2
+$$
+Secara teoritis:
+$$
+\rho_1=\frac{0.5}{1-0.2}=\frac{0.5}{0.8}=0.625
+$$
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa terdapat pola yang cenderung positif dan dibuktikan juga dengan adanya nilai korelasi sebesar 0.625 secara teoritis dan juga empiris sebesar 0.7181941, yang berarti memiliki hubungan positif cukup kuat.
+
+```{r}
+yt_ar2_2 <- ar2[-c(1, 2)]
+yt_ar2_2
+yt_2_ar2 <- ar2[-c(299, 300)]
+yt_2_ar2
+```
+
+
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₂
+plot(x = yt_2_ar2, y = yt_ar2_2, xlab = expression(Y[t-2]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-2 (AR(2))")
+```
+
+```{r}
+# Korelasi antara Yₜ dengan Yₜ₋₂
+cor(yt_ar2_2, yt_2_ar2)
+```
+
+Secara teoritis:
+$$
+\rho_2=\phi_1\rho_1+\phi_2=0.5(0.625)+0.2=0.5125
+$$
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa terdapat pola yang cenderung positif dan dibuktikan juga dengan adanya nilai korelasi sebesar 0.5125 secara teoritis dan juga empiris sebesar 0.5889847, yang berarti memiliki hubungan positif sedang.
+
+```{r}
+yt_ar2_3 <- ar2[-c(1, 2, 3)]
+yt_ar2_3
+yt_3_ar2 <- ar2[-c(298, 299, 300)]
+yt_3_ar2
+```
+
+
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₃
+plot(x = yt_3_ar2, y = yt_ar2_3, xlab = expression(Y[t-3]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-3 (AR(2))")
+```
+
+```{r}
+# Korelasi antara Yₜ dengan Yₜ₋₃
+cor(yt_ar2_3, yt_3_ar2)
+```
+
+Secara teoritis:
+$$
+\rho_3=\phi_1\rho_2+\phi_2\rho_1=0.5(0.5125)+0.2(0.625)=0.38125
+$$
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa terdapat pola yang cenderung positif dan dibuktikan juga dengan adanya nilai korelasi sebesar 0.38125 secara teoritis dan juga empiris sebesar 0.4630342, yang berarti memiliki hubungan positif sedang.
+
+**Kesimpulan:** Berdasarkan semua analisis yang telah dilakukan pada AR(2), dapat disimpulkan bahwa data yang dibangkitkan bersifat stasioner, memiliki autokorelasi yang positif pada lag 1, lag 2, dan lag 3.
+
+# PROSES ARMA(2,2)
+1. Bangkitkan model ARMA(2,2) dengan θ₁ = 0.4, θ₂ = 0.6, φ₁ = 0.5 dan φ₂ = 0.2 sebanyak 300 data (manual dan arima.sim)
+2. Buat plot time series, plot ACF, plot PACF dan plot EACF. Identifikasi apakah data tersebut stasioner
+3. Buat scatterplot antara Yₜ dengan Yₜ₋₁, Yₜ dengan Yₜ₋₂ serta Yₜ dengan Yₜ₋₃
+4. Hitung autokorelasi masing-masing baik dari data bangkitan maupun secara teoritis
+
+## 1. Pembangkitan Data ARMA (2,2)
+```{r}
+# Bangkitkan data ARMA(2,2) secara manual
+set.seed(1234)
+n <- 300
+wn <- rnorm(n)
+
+phi1 <- 0.5;  phi2 <- 0.2
+theta1 <- 0.4; theta2 <- 0.6
+
+arma22 <- numeric(n)
+arma22[1] <- wn[1]
+arma22[2] <- phi1 * arma22[1] + wn[2] + theta1 * wn[1]
+for (i in 3:n) {arma22[i] <- phi1 * arma22[i - 1] + phi2 * arma22[i - 2] + wn[i] + theta1 * wn[i - 1] + theta2 * wn[i - 2]}
+arma22
+```
+
+
+```{r}
+# Bangkitkan data ARMA(2,2) dengan arima.sim
+arma22.sim <- arima.sim(list(order = c(2, 0, 2), ar = c(0.5, 0.2), ma = c(0.4, 0.6)), n = 300)
+arma22.sim
+```
+
+## 2. Karakteristik Data ARMA(2,2)
+```{r}
+# Plot Time Series ARMA(2,2)
+ts.plot(arma22, main = "ARMA(2,2) Manual")
+ts.plot(arma22.sim, main = "ARMA(2,2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot time series ARMA(2,2) secara manual, terlihat bahwa data ARMA(2,2) yang dibangkitkan berfluktuasi dalam rataan atau di sekitar nilai tengah yang mendekeati nol serta tanpa tren naik atau turun yang jelas. Hal ini juga terlihat pada plot time series ARMA(2,2) yang dibangkitkan dengan fungsi arima.sim, sehingga kedua plot time series tersebut menunjukkan sifat stasioner dalam rataan.
+
+```{r}
+# Plot ACF ARMA(2,2)
+acf(arma22, main = "ACF ARMA(2,2) Manual")
+acf(arma22.sim, main = "ACF ARMA(2,2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot ACF ARMA(2,2) secara manual, terlihat bahwa plot ACF tails off, sedangkan lag setelahnya cenderung untuk mendekati nilai nol. Hal ini juga terlihat pada plot ACF ARMA(2,2) yang dibangkitkan dengan fungsi arima.sim.
+
+
+```{r}
+# Plot PACF ARMA(2,2)
+pacf(arma22, main = "PACF ARMA(2,2) Manual")
+pacf(arma22.sim, main = "PACF ARMA(2,2) arima.sim")
+```
+**Interpretasi:** Berdasarkan plot PACF ARMA(2,2) secara manual, menunjukkan lonjakan yang signifikan pada lag pertama yang kemudian diikuti dengan lonjakan negatif pada lag 3 serta disusul dengan lag lag selanjutnya yang berada pada batas non signifikan. Dalam hal ini, dapat dikatakan bahwa PACF tidak cut off yang menandakan adanya komponen MA, sehingga benar jika ini adalah pola ARMA.
+
+
+```{r}
+# Plot EACF ARMA(2,2) Manual
+TSA::eacf(arma22)
+```
+**Interpretasi:** EACF manual menunjukkan pola segitiga nol yang mengarah pada kandidat AR(2) dan MA(2)
+
+```{r}
+# Plot EACF ARMA(2,2) arima.sim
+TSA::eacf(arma22.sim)
+```
+**Interpretasi:** EACF arima.sim menunjukkan pola segitiga nol yang mengarah pada kandidat AR(2) dan MA(2)
+
+## 3. Scatterplot Antar Lag dan Autokorelasi
+```{r}
+yt_arma22   <- arma22[-1]
+yt_arma22
+yt_1_arma22 <- arma22[-300]
+yt_1_arma22
+```
+
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₁
+plot(x = yt_1_arma22, y = yt_arma22, xlab = expression(Y[t-1]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-1 (ARMA(2,2))")
+```
+
+```{r}
+# Korelasi antara Yₜ dengan Yₜ₋₁
+cor(yt_arma22, yt_1_arma22)
+```
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa terdapat pola yang cenderung positif dan dibuktikan juga dengan adanya nilai korelasi sebesar 0.8955216 dan secara teoritis sebesar 0.8591993, yang berarti memiliki hubungan positif kuat.
+
+```{r}
+yt_arma22_2 <- arma22[-c(1, 2)]
+yt_arma22_2
+yt_2_arma22 <- arma22[-c(299, 300)]
+yt_2_arma22
+```
+
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₂
+plot(x = yt_2_arma22, y = yt_arma22_2, xlab = expression(Y[t-2]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-2 (ARMA(2,2))")
+```
+
+```{r}
+# Korelasi antara Yₜ dengan Yₜ₋₂
+cor(yt_arma22_2, yt_2_arma22)
+```
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa terdapat pola yang cenderung positif dan dibuktikan juga dengan adanya nilai korelasi sebesar 0.7899614 dan secara teoritis sebesar 0.7491908, yang berarti memiliki hubungan positif cukup kuat.
+
+
+```{r}
+yt_arma22_3 <- arma22[-c(1, 2, 3)]
+yt_arma22_3
+yt_3_arma22 <- arma22[-c(298, 299, 300)]
+yt_3_arma22
+```
+
+
+```{r}
+# Scatterplot Yₜ dengan Yₜ₋₃
+plot(x = yt_3_arma22, y = yt_arma22_3, xlab = expression(Y[t-3]), ylab = expression(Y[t]), main = "Scatterplot Yt vs Yt-3 (ARMA(2,2))")
+```
+
+```{r}
+# Korelasi antara Yₜ dengan Yₜ₋₃
+cor(yt_arma22_3, yt_3_arma22)
+```
+**Interpretasi**: Berdasarkan scatterplot di atas, terlihat bahwa terdapat pola yang cenderung positif dan dibuktikan juga dengan adanya nilai korelasi sebesar 0.6195458 dan secara teoritis sebesar 0.5464353, yang berarti memiliki hubungan positif sedang atau bisa dibilang memiliki hubungan yang paling lemah diantara lag lag sebelumnya. 
+
+Secara teoritis:
+```{r}
+ARMAacf(ar = c(0.5, 0.2), ma = c(0.4, 0.6), lag.max = 3)
+```
+**Kesimpulan:** Berdasarkan semua analisis yang telah dilakukan pada ARMA(2,2), dapat disimpulkan bahwa data yang dibangkitkan bersifat stasioner, memiliki autokorelasi yang positif pada lag 1, lag 2, dan lag 3.
+
